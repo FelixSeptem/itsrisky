@@ -37,7 +37,7 @@ func TestSignerWithTimeout(t *testing.T) {
 	var (
 		str = "something information quite long"
 	)
-	signed, err := s.Sign(str, time.Hour*72)
+	signed, err := s.Sign(str, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestSignerWithTimeout(t *testing.T) {
 	if unsigned != str {
 		t.Errorf("expect %s got %s", str, unsigned)
 	}
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 2)
 	_, err = s.Unsign(signed)
 	if _, ok := err.(*ErrDataExpired); !ok {
 		t.Errorf("expect got expired err got %v", err)
@@ -61,28 +61,31 @@ func TestSerialization(t *testing.T) {
 		Hash:      sha1.New(),
 	}
 	s.WithSalt(strconv.FormatInt(time.Now().UnixNano(), 10))
-	type TokenData struct {
-		A int
-		B float64
-		C string
-		D []int32
+	type tokenData struct {
+		UserId        uint64
+		UserName      string
+		UserAvatar    string
+		UserCreatedAt int64
+		IsVIP         bool
+		UserLevel     []int
 	}
-	data := TokenData{
-		A: 1,
-		B: 3.14,
-		C: "something info",
-		D: []int32{
+	data := tokenData{
+		UserId:        12580,
+		UserName:      "UserName",
+		UserAvatar:    "www.fakeuser.org/user/12580.png",
+		UserCreatedAt: time.Now().Unix(),
+		IsVIP:         false,
+		UserLevel: []int{
 			1,
+			2,
 			3,
-			5,
-			7,
 		},
 	}
 	signed, err := s.Dumps(data, time.Hour*72)
 	if err != nil {
 		t.Fatal(err)
 	}
-	receiveData := new(TokenData)
+	receiveData := new(tokenData)
 	err = s.Loads(signed, receiveData)
 	if err != nil {
 		t.Fatal(err)
