@@ -2,10 +2,8 @@
 package itsrisky
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/hmac"
-	"encoding/gob"
 	"fmt"
 	"hash"
 	"strconv"
@@ -15,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/json-iterator/go"
 	"reflect"
 )
 
@@ -112,15 +111,15 @@ func (s *Serialization) WithSalt(salt string) {
 	s.salt = salt
 }
 
-// dump the given data into gob and generate a signature with data and deadline information
+// dump the given data into json and generate a signature with data and deadline information
 func (s *Serialization) Dumps(in interface{}, expiredTime time.Duration) (string, error) {
-	b := bytes.NewBuffer([]byte{})
-	en := gob.NewEncoder(b)
-	if err := en.Encode(in); err != nil {
-		return "", &ErrBadData{Data: in}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	b, err := json.Marshal(in)
+	if err != nil {
+		return "", &ErrBadData{Data: in, Err: err}
 	}
 	hashFun := s.getSignature()
-	rawData := b.String()
+	rawData := BytesString(b)
 	deadline := strconv.FormatInt(time.Now().Add(expiredTime).Unix(), 10)
 	deadlineEncode := base58.Encode(StringBytes(deadline))
 	sign := hashFun.Sum(StringBytes(fmt.Sprintf("%s::%s", fmt.Sprintf("%s-%s", rawData, s.salt), deadline)))
@@ -129,6 +128,7 @@ func (s *Serialization) Dumps(in interface{}, expiredTime time.Duration) (string
 
 // validate given signed string and check whether the data is expired, return data if string is well signed
 func (s *Serialization) Loads(data string, receiveData interface{}) (err error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if reflect.ValueOf(receiveData).Kind() != reflect.Ptr {
 		return &ErrBadData{Data: data, Err: errors.New("receiveData shall be a pointer")}
 	}
@@ -136,8 +136,6 @@ func (s *Serialization) Loads(data string, receiveData interface{}) (err error) 
 	if len(strs) != 3 {
 		return &ErrBadData{Data: data}
 	}
-	b := bytes.NewBuffer(StringBytes(strs[0]))
-	de := gob.NewDecoder(b)
 	hashFun := s.getSignature()
 	deadlineStr := base58.Decode(strs[2])
 	deadline, err := strconv.ParseInt(BytesString(deadlineStr), 10, 64)
@@ -152,9 +150,8 @@ func (s *Serialization) Loads(data string, receiveData interface{}) (err error) 
 	if hmac.Equal(validSign, []byte(strs[1])) {
 		return &ErrBadData{Data: data}
 	}
-	if err := de.Decode(receiveData); err != nil {
-		fmt.Println(err.Error())
-		return &ErrBadData{Data: data, Err: err}
+	if err := json.Unmarshal(StringBytes(strs[0]), receiveData); err != nil {
+		return err
 	}
 	return nil
 }
