@@ -123,7 +123,7 @@ func (s *Serialization) Dumps(in interface{}, expiredTime time.Duration) (string
 	deadline := strconv.FormatInt(time.Now().Add(expiredTime).Unix(), 10)
 	deadlineEncode := base58.Encode(StringBytes(deadline))
 	sign := hashFun.Sum(StringBytes(fmt.Sprintf("%s::%s", fmt.Sprintf("%s-%s", rawData, s.salt), deadline)))
-	return fmt.Sprintf("%s::%s::%s", rawData, hex.EncodeToString(sign), deadlineEncode), nil
+	return fmt.Sprintf("%s::%s::%s", base58.Encode(StringBytes(rawData)), hex.EncodeToString(sign), deadlineEncode), nil
 }
 
 // validate given signed string and check whether the data is expired, return data if string is well signed
@@ -150,7 +150,7 @@ func (s *Serialization) Loads(data string, receiveData interface{}) (err error) 
 	if hmac.Equal(validSign, []byte(strs[1])) {
 		return &ErrBadData{Data: data}
 	}
-	if err := json.Unmarshal(StringBytes(strs[0]), receiveData); err != nil {
+	if err := json.Unmarshal(base58.Decode(strs[0]), receiveData); err != nil {
 		return err
 	}
 	return nil
